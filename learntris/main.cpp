@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <ctype.h>
+#include <string.h>
 
 #define MATRIX_WIDTH 10
 #define MATRIX_DEPTH 22
@@ -166,15 +167,22 @@ const tetromino_pattern tetromino_patterns[] =
 	}
 };
 
+typedef struct tag_tetromino_location
+{
+	int top;
+	int left;
+} tetromino_location;
+
 typedef struct tag_tetromino
 {
 	int type;
 	int position;
+	tetromino_location location;
 } tetromino;
 
 typedef struct tag_matrix
 {
-	char squares[MATRIX_WIDTH][MATRIX_DEPTH];
+	char squares[MATRIX_WIDTH * MATRIX_DEPTH + 1];
 } matrix;
 
 typedef struct tag_game_state
@@ -195,9 +203,11 @@ void display_score(game_state *this_game_state);
 void display_num_lines(game_state *this_game_state);
 bool row_full(matrix *this_matrix, int row);
 void exec_step(game_state *this_game_state);
+void spawn_tetromino(tetromino *this_tetromino, int tetromino_type);
 void display_tetromino(tetromino *this_tetromino);
 void rotate_right(tetromino *this_tetromino);
 void rotate_left(tetromino *this_tetromino);
+void print_all(game_state *this_game_state);
 
 int main()
 {
@@ -248,8 +258,7 @@ int main()
 			print_matrix(main_matrix);
 			break;
 		case 'P':
-			// print main matrix AND move matrix
-			printf("command not implemented\n");
+			print_all(&my_game_state);
 			break;
 		case 'c':
 			clear_matrix(main_matrix);
@@ -264,25 +273,25 @@ int main()
 			display_tetromino(active_tetromino);
 			break;
 		case 'I':
-			active_tetromino->type = tetromino_I;
+			spawn_tetromino(active_tetromino, tetromino_I);
 			break;
 		case 'J':
-			active_tetromino->type = tetromino_J;
+			spawn_tetromino(active_tetromino, tetromino_J);
 			break;
 		case 'L':
-			active_tetromino->type = tetromino_L;
+			spawn_tetromino(active_tetromino, tetromino_L);
 			break;
 		case 'O':
-			active_tetromino->type = tetromino_O;
+			spawn_tetromino(active_tetromino, tetromino_O);
 			break;
 		case 'S':
-			active_tetromino->type = tetromino_S;
+			spawn_tetromino(active_tetromino, tetromino_S);
 			break;
 		case 'T':
-			active_tetromino->type = tetromino_T;
+			spawn_tetromino(active_tetromino, tetromino_T);
 			break;
 		case 'Z':
-			active_tetromino->type = tetromino_Z;
+			spawn_tetromino(active_tetromino, tetromino_Z);
 			break;
 		case ')':
 			rotate_right(active_tetromino);
@@ -313,14 +322,16 @@ void init(game_state *this_game_state)
 	this_game_state->num_lines = 0;
 
 	this_game_state->active_tetromino.type = illegal_tetromino;
-	this_game_state->active_tetromino.position = 0;
+	this_game_state->active_tetromino.position = -1;
+	this_game_state->active_tetromino.location.top = -1;
+	this_game_state->active_tetromino.location.left = -1;
 }
 
 void clear_row(matrix *this_matrix, int row)
 {
 	for (int col = 0; col < MATRIX_WIDTH; col++)
 	{
-		this_matrix->squares[col][row] = empty;
+		this_matrix->squares[MATRIX_WIDTH * row + col] = empty;
 	}
 }
 
@@ -330,6 +341,7 @@ void clear_matrix(matrix *this_matrix)
 	{
 		clear_row(this_matrix, row);
 	}
+	this_matrix->squares[MATRIX_WIDTH * MATRIX_DEPTH] = '\0';
 }
 
 void print_matrix(matrix *this_matrix)
@@ -338,7 +350,7 @@ void print_matrix(matrix *this_matrix)
 	{
 		for (int col = 0; col < MATRIX_WIDTH; col++)
 		{
-			printf("%c ", this_matrix->squares[col][row]);
+			printf("%c ", this_matrix->squares[MATRIX_WIDTH * row + col]);
 		}
 		putchar('\n');
 	}
@@ -355,9 +367,9 @@ void input_matrix(matrix *this_matrix)
 {
 	int value;
 
-	for (int y = 0; y < MATRIX_DEPTH; y++)
+	for (int row = 0; row < MATRIX_DEPTH; row++)
 	{
-		for (int x = 0; x < MATRIX_WIDTH; )
+		for (int col = 0; col < MATRIX_WIDTH; )
 		{
 			value = getchar();
 
@@ -366,7 +378,8 @@ void input_matrix(matrix *this_matrix)
 				continue;
 			}
 
-			this_matrix->squares[x++][y] = check_square_value(value) ? value : empty;
+			this_matrix->squares[MATRIX_WIDTH * row + col++] =
+				check_square_value(value) ? value : empty;
 		}
 	}
 }
@@ -385,7 +398,7 @@ bool row_full(matrix *this_matrix, int row)
 {
 	for (int col = 0; col < MATRIX_WIDTH; col++)
 	{
-		if (this_matrix->squares[col][row] == empty)
+		if (this_matrix->squares[MATRIX_WIDTH * row + col] == empty)
 		{
 			return false;
 		}
@@ -406,6 +419,17 @@ void exec_step(game_state *this_game_state)
 	}
 }
 
+void spawn_tetromino(tetromino *this_tetromino, int tetromino_type)
+{
+	const tetromino_pattern *cur_pattern;
+
+	this_tetromino->type = tetromino_type;
+	cur_pattern = tetromino_patterns + this_tetromino->type;
+	this_tetromino->position = 0;
+	this_tetromino->location.top = 0;
+	this_tetromino->location.left = MATRIX_WIDTH / 2 - cur_pattern->width / 2;
+}
+
 void display_tetromino(tetromino *this_tetromino)
 {
 	int tetromino_height;
@@ -413,26 +437,34 @@ void display_tetromino(tetromino *this_tetromino)
 	const tetromino_pattern *cur_pattern;
 	char *pattern;
 
-	if (this_tetromino->type != illegal_tetromino)
+	if (this_tetromino->type == illegal_tetromino
+		|| this_tetromino->position < 0)
 	{
-		cur_pattern = tetromino_patterns + this_tetromino->type;
-		tetromino_height = cur_pattern->height;
-		tetromino_width = cur_pattern->width;
-		pattern = cur_pattern->pattern[this_tetromino->position];
+		return;
+	}
 
-		for (int row = 0; row < tetromino_height; row++)
+	cur_pattern = tetromino_patterns + this_tetromino->type;
+	tetromino_height = cur_pattern->height;
+	tetromino_width = cur_pattern->width;
+	pattern = cur_pattern->pattern[this_tetromino->position];
+
+	for (int row = 0; row < tetromino_height; row++)
+	{
+		for (int col = 0; col < tetromino_width; col++)
 		{
-			for (int col = 0; col < tetromino_width; col++)
-			{
-				printf("%c ", *pattern++);
-			}
-			putchar('\n');
+			printf("%c ", *pattern++);
 		}
+		putchar('\n');
 	}
 }
 
 void rotate_right(tetromino *this_tetromino)
 {
+	if (this_tetromino->position < 0)
+	{
+		return;
+	}
+
 	this_tetromino->position++;
 	if (this_tetromino->position > TETROMINO_POSITIONS - 1)
 	{
@@ -442,9 +474,18 @@ void rotate_right(tetromino *this_tetromino)
 
 void rotate_left(tetromino *this_tetromino)
 {
+	if (this_tetromino->position < 0)
+	{
+		return;
+	}
+
 	this_tetromino->position--;
 	if (this_tetromino->position < 0)
 	{
 		this_tetromino->position = TETROMINO_POSITIONS - 1;
 	}
+}
+
+void print_all(game_state *this_game_state)
+{
 }
