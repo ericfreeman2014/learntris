@@ -531,46 +531,48 @@ bool rotate_left(tetromino *this_tetromino, matrix *this_matrix)
 
 bool check_collision_right(tetromino *this_tetromino, matrix *this_matrix, const tetromino_pattern *cur_pattern, int extra_move)
 {
+	int tetramino_bitfield, matrix_bitfield, row, col, matrix_col;
+
+	for (col = cur_pattern->width - 1 - extra_move; col >= 0; col--)
+	{
+		tetramino_bitfield = 0;
+		for (row = 0; row < cur_pattern->height; row++)
+		{
+			char ch;
+			int bit;
+			ch = cur_pattern->pattern[this_tetromino->position]
+									 [cur_pattern->height * row + col];
+			bit = (ch == empty) ? 0 : 1;
+			tetramino_bitfield += bit << row;
+		}
+		
+		matrix_bitfield = 0;
+		matrix_col = this_tetromino->location.left + col + 1 - extra_move;
+		for (row = this_tetromino->location.top;
+			row < this_tetromino->location.top + cur_pattern->height; row++)
+		{
+			char ch;
+			int bit;
+			ch = this_matrix->squares[MATRIX_WIDTH * row + matrix_col];
+			bit = (ch == empty) ? 0 : 1;
+			matrix_bitfield += bit << (row - this_tetromino->location.top);
+		}
+
+		if ((tetramino_bitfield & matrix_bitfield) != 0)
+		{
+			return true;
+		}
+	}
+
 	return false;
-	/*
-	int tetramino_bitfield, matrix_bitfield, row, col;
-
-	tetramino_bitfield = 0;
-	col = cur_pattern->width - 1 - extra_move;
-	for (row = 0; row < cur_pattern->height; row++)
-	{
-		char ch;
-		int bit;
-		ch = cur_pattern->pattern[this_tetromino->position]
-								 [cur_pattern->height * row + col];
-		bit = (ch == empty) ? 0 : 1;
-		tetramino_bitfield += bit << row;
-	}
-	
-	matrix_bitfield = 0;
-	col = this_tetromino->location.left + cur_pattern->width - extra_move;
-	for (row = this_tetromino->location.top;
-		row < this_tetromino->location.top + cur_pattern->height; col++)
-	{
-		char ch;
-		int bit;
-		ch = this_matrix->squares[MATRIX_WIDTH * row + col];
-		bit = (ch == empty) ? 0 : 1;
-		matrix_bitfield += bit << (row - this_tetromino->location.top);
-	}
-
-	return ((tetramino_bitfield & matrix_bitfield) != 0);
-	*/
 }
 
 bool check_collision_left(tetromino *this_tetromino, matrix *this_matrix, const tetromino_pattern *cur_pattern, int extra_move)
 {
-	return false;
-	/*
 	int tetramino_bitfield, matrix_bitfield, row, col;
 
 	tetramino_bitfield = 0;
-	col = 0 + extra_move;
+	col = extra_move;
 	for (row = 0; row < cur_pattern->height; row++)
 	{
 		char ch;
@@ -584,7 +586,7 @@ bool check_collision_left(tetromino *this_tetromino, matrix *this_matrix, const 
 	matrix_bitfield = 0;
 	col = this_tetromino->location.left - 1 + extra_move;
 	for (row = this_tetromino->location.top;
-		row < this_tetromino->location.top + cur_pattern->height; col++)
+		row < this_tetromino->location.top + cur_pattern->height; row++)
 	{
 		char ch;
 		int bit;
@@ -594,7 +596,6 @@ bool check_collision_left(tetromino *this_tetromino, matrix *this_matrix, const 
 	}
 
 	return ((tetramino_bitfield & matrix_bitfield) != 0);
-	*/
 }
 
 bool check_collision_down(tetromino *this_tetromino, matrix *this_matrix, const tetromino_pattern *cur_pattern, int extra_move)
@@ -640,7 +641,6 @@ bool nudge_right(tetromino *this_tetromino, matrix *this_matrix)
 	}
 
 	old_value = this_tetromino->location.left;
-	this_tetromino->location.left++;
 
 	cur_pattern = tetromino_patterns + this_tetromino->type;
 	extra_move = empty_right(cur_pattern, this_tetromino->position);
@@ -649,6 +649,8 @@ bool nudge_right(tetromino *this_tetromino, matrix *this_matrix)
 	{
 		return false;
 	}
+
+	this_tetromino->location.left++;
 
 	if (this_tetromino->location.left > MATRIX_WIDTH - cur_pattern->width + extra_move)
 	{
@@ -670,7 +672,6 @@ bool nudge_left(tetromino *this_tetromino, matrix *this_matrix)
 	}
 
 	old_value = this_tetromino->location.left;
-	this_tetromino->location.left--;
 
 	cur_pattern = tetromino_patterns + this_tetromino->type;
 	extra_move = empty_left(cur_pattern, this_tetromino->position);
@@ -679,6 +680,8 @@ bool nudge_left(tetromino *this_tetromino, matrix *this_matrix)
 	{
 		return false;
 	}
+
+	this_tetromino->location.left--;
 
 	if (this_tetromino->location.left < 0 - extra_move)
 	{
